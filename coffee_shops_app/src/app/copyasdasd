@@ -1,0 +1,119 @@
+import { Component, OnInit } from '@angular/core';
+import { PseudoApiService, ProdusDisponibil } from './pseudo-api.service';
+import { CafeneaSauLocalitate } from './cafeneasaulocalitate';
+import { FlatTreeControl } from '@angular/cdk/tree';
+import { MatTreeFlatDataSource, MatTreeFlattener } from '@angular/material/tree';
+import { ArrayDataSource } from '@angular/cdk/collections';
+
+interface CafeneaSauLocalitateWithExpandable {
+  id: number;
+  idParinte?: number | null;
+  denumire: string;
+  fel: string; // Aici voi avea "C" de la cafenea sau "L" de la localitate
+  adancime?: number | null;
+  isExpanded?: boolean;
+}
+
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss']
+})
+
+export class AppComponent implements OnInit {
+  title = 'ExAngular';
+  cafeneaToShow: number = 0;
+  denumireCafenea: string = 'Please select a coffee shop from the list on the leftside!';
+  listaCafele: ProdusDisponibil[] = [];
+
+  constructor(private api: PseudoApiService){}
+
+  // Flat tree control
+  flatControl = new FlatTreeControl<CafeneaSauLocalitate>(
+    node => node.adancime || 1,
+    node => node.fel == 'L' // nu functioneaza collapsing - to solve later
+  );
+  treeControl = new FlatTreeControl<CafeneaSauLocalitate>(
+    node => node.adancime || 1,
+    node => node.fel == 'L' // nu functioneaza collapsing - to solve later
+  );
+  pseudoFlatTree: CafeneaSauLocalitate[] = [];
+  dataSource = new ArrayDataSource(this.pseudoFlatTree);
+
+
+  ngOnInit(): void {
+    // Obtin lista cu toate cafenelele si toate localitatile
+    this.api.ListaLocalitati().subscribe(lista => {
+      // setez lista obtinuta de la api ca sursa pentru flat tree din angular material
+      this.pseudoFlatTree = lista;
+      this.dataSource = new ArrayDataSource(lista);
+    })
+  }
+  // returneaza daca nodul curent este collapsable sau nu / daca este localitate sau cafenea
+  hasChild(index:number, node: CafeneaSauLocalitate){
+    return node.fel == "L";
+  }
+  // functie care ruleaza cand se da click pe o cafenea din arborele din stanga
+  shopClick(id: number, denumire: string){
+    this.cafeneaToShow = id;
+    this.denumireCafenea = denumire;
+    // make api request for coffee shop data and wait for it to finish
+    // cer toate produsele disponibile pentru cafeneaua pe care a dat click userul
+    this.api.ProduseDisponibile(id).subscribe(cafele => {
+      // actualizez lista de cafele pentru cafeneaua selectata
+      this.listaCafele = cafele;
+    })
+  }
+
+  getParentNode(node: CafeneaSauLocalitate){
+    const nodeIndex = this.pseudoFlatTree.indexOf(node);
+
+    for (let i = nodeIndex - 1; i >= 0; i--) {
+      if (this.pseudoFlatTree[i].adancime === node.adancime! - 1) {
+        return this.pseudoFlatTree[i];
+      }
+    }
+
+    return null;
+  }
+
+  shouldRender(node: CafeneaSauLocalitate) {
+    let parent = this.getParentNode(node);
+    while (parent) {
+      if (!parent.isExpanded) {
+        return false;
+      }
+      parent = this.getParentNode(parent);
+    }
+    return true;
+  }
+
+  // fix pentru collapse not working - transform in nested tree - to solve later
+  //returneaza un mapping pentru fiecare nod si copii lui directi
+  // BFS(array: CafeneaSauLocalitate[], startNode: CafeneaSauLocalitate){
+  //   let visited:  CafeneaSauLocalitate[] = [];
+  //   let queue:    CafeneaSauLocalitate[] = [];
+  //   let s:        CafeneaSauLocalitate;
+  //   let arr: string [] = [];
+  //   let myMap = new Map();
+
+  //   visited.push(startNode);
+  //   queue.push(startNode);
+
+  //   while (queue.length){
+  //     s = queue.shift()!;
+  //     array.forEach(element => {
+  //       if(!visited.includes(element) && element.idParinte == s.id){
+  //         visited.push(element);
+  //         queue.push(element);
+  //         arr.push(element.denumire);
+  //         myMap.set(s.denumire, arr);
+  //       }
+  //     });
+  //     arr = [];
+  //   }
+  //   console.log("FINAL DICT IS: ", myMap);
+  //   return myMap;
+  // }
+
+}
